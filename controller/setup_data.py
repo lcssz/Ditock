@@ -3,7 +3,6 @@ from datetime import date
 import time
 import pickle
 from model.symbol_data import SymbolData
-import yfinance as y
 
 # The days to increment value equivalent to 12 days in seconds.
 INC_DAYS = 1036800 
@@ -16,12 +15,24 @@ def initialize_mt5():
         print("Unable to start MetaTrader5 :", mt5.last_error())
         quit()
 
+def watch_all_symbols(stocks):
+    for stock in stocks:
+        if not mt5.symbol_select(stock):
+            print("symbol_select({}) failed, error code={}".format(stock, mt5.last_error()))
+            continue
+        symbols_data = get_raw_symbols_data()
+        symbols_to_watch = [s.basis for s in symbols_data if s.basis == stock or s.name.startswith(stock[:-1:])]
+        for symbol in symbols_to_watch:
+            if not mt5.symbol_select(symbol):
+                print("symbol_select({}) failed, error code={}".format(stock, mt5.last_error()))
+                continue
+
 def get_raw_symbols_data():
     """
     Get raw symbols data from MetaTrader5.
     Returns:
         A list of symbols data.
-    """
+    """  
     return mt5.symbols_get()
 
 def write_data_to_file(dict_data):
@@ -42,15 +53,14 @@ def setup_symbol_data():
         A dictionary containing processed symbol data.
     """
     initialize_mt5()
-    
+    stocks = []
+    # Fetch the stocks list from a text file.
+    with open("./resources/custom_stocks.txt", 'r') as f:
+        stocks = f.read().split(";")
+    watch_all_symbols(stocks)
     symbols_data = get_raw_symbols_data()
     dict_data = {}
     
-    # Fetch the stocks list from a text file.
-    stocks = []
-    with open("./resources/custom_stocks.txt", 'r') as f:
-        stocks = f.read().split(";")
-
     # Loop over each stock and fetch its current price.
     for n_stock in stocks:
         # Fetch the current price of the stock.
@@ -96,15 +106,12 @@ def setup_symbol_data():
                 if key_dict not in dict_data:
                     dict_data[key_dict] = []
 
-                # Adicione o símbolo ao livro de ofertas
                 mt5.market_book_add(symbol["name"])
 
-                # Obtenha os valores do livro de ofertas para o símbolo
                 book_info_tuple = mt5.market_book_get(symbol["name"])
                 
-                # Se o livro de ofertas não estiver vazio, obtenha o primeiro valor (preço de oferta mais alto)
                 book_bid_value = book_info_tuple[0].price if book_info_tuple else None
-                book_ask_value = book_info_tuple[1].price if len(book_info_tuple) > 1 else None
+                book_ask_value = book_info_tuple[1].price if book_info_tuple and len(book_info_tuple) > 1 else None
 
                 symbol_obj = SymbolData(symbol["name"], option_right, symbol["option_strike"], expiration_time, moneyness_str, book_bid_value, book_ask_value)
 

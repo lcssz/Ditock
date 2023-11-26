@@ -5,7 +5,7 @@ import pickle
 from datetime import date, datetime
 from dateutil.relativedelta import relativedelta
 import openpyxl
-
+from openpyxl.styles import Alignment
 # Define the active/current month of the project.
 actual_month = date.today()
 
@@ -117,7 +117,7 @@ def output_wb_strategies():
     stocks = get_stock_option("./resources/custom_stocks.txt")
     for stock in stocks:
         stock_ws = wb.create_sheet(stock)
-        stock_ws.append(["Strategy Name","Combination","Delta","Cost per paper on montage","Cost per paper on dismounting","Paper and Strike"])
+        stock_ws.append(["Choice","Strategy Name","Combination","Delta","Cost per paper on montage","Cost per paper on dismounting","Paper and Strike","Payoff CALL","Payoff PUT"])
         for strategy in raw_strategies:
             if any(i.diff_strike == 0 for i in strategy.instructions):
                 strategy_data = mount_zero_strategy(stock,strategy,local_database)
@@ -139,14 +139,21 @@ def output_wb_strategies():
                         for symbol_list in strategy_data:
                             data = Strategy_Output(symbol_list,strategy)
                             stock_ws.append(data.transform_in_row())
+        
+        stock_ws.row_dimensions[1].height = 56.7
+        stock_ws.column_dimensions['D'].width = 10
+        stock_ws.column_dimensions['E'].width = 12
+        stock_ws.freeze_panes = "A2"
         dims = {}
         for row in stock_ws.rows:
             for cell in row:
-                if cell.value:
-                    dims[cell.column_letter] = max((dims.get(cell.column_letter, 0), len(str(cell.value))))
-
+                dims[cell.column_letter] = max((dims.get(cell.column_letter, 0), len(str(cell.value))))
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+                if cell.coordinate in ['D1','E1']:
+                    cell.alignment = Alignment(horizontal='center', vertical='center',wrap_text=True)
         for col, value in dims.items():
-            if value:
+            if value and col not in ['D','E']:
                 stock_ws.column_dimensions[col].width = value
+
     del wb["Sheet"]
     wb.save(f'./out/Combination-{datetime.now().strftime("%d-%m-%Y %HH%Mm")}.xlsx')
